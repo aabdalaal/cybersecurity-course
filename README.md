@@ -2,13 +2,8 @@
 
 تطبيقٌ تفاعليّ ثنائي اللغة (عربي/إنجليزي) يعمل بلا إنترنت بعد أوّل فتح — إحدى عشرة وحدة، مختبراتٌ حيّة، اختبارات، وتحفيز.
 
-## النشر على GitHub Pages
-1. أنشئ مستودعاً جديداً (Public) — مثلاً `cyber-security-course`.
-2. ارفع محتوى هذا المجلّد كلَّه (`index.html`، `.nojekyll`، `README.md`).
-3. Settings → Pages → Branch: `main` / root → Save.
-4. بعد دقائق يصير الرابط: `https://<username>.github.io/cyber-security-course/`
-
-## الربط العميق (Deep links) — لرموز QR في الكتاب
+النشر على GitHub Pages
+الربط العميق (Deep links) — لرموز QR في الكتاب
 - الرئيسية: `.../` 
 - وحدةٌ بعينها: `.../#u=4` (الوحدة الرابعة)
 - مختبر وحدةٍ مباشرةً: `.../#u=4&tab=lab`
