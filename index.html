@@ -695,10 +695,9 @@ function saveState(){ try{ localStorage.setItem('preview_state', JSON.stringify(
 function awardXP(n){ state.xp=(state.xp||0)+n; document.getElementById('xp-pill').textContent='⚡ '+state.xp+' XP'; saveState(); }
 function checkBadges(){ }
 /* ===== محرّك النطق (تعليق المدرّس) — Web Speech API، يعمل بلا إنترنت ===== */
-var _naPlaying = false, _naPump = null;
+var _naPlaying = false;
 function _naReset(){
   _naPlaying = false;
-  if(_naPump){ clearInterval(_naPump); _naPump = null; }
   try{ document.querySelectorAll('.na-on').forEach(function(b){ b.classList.remove('na-on'); if(b.dataset.icon) b.textContent = b.dataset.icon; }); }catch(e){}
 }
 function _naLang(){ try{ return (window.state && state.language==='ar') ? 'ar' : 'en'; }catch(e){ return 'en'; } }
@@ -710,20 +709,38 @@ function _naPickVoice(lang){
   }catch(e){}
   return null;
 }
+/* يقطّع التعليق إلى جُمل قصيرة — يتفادى حدّ القطع (~15ث) دون مضخّةٍ تُحدث صمتاً */
+function _naChunks(text){
+  var out = [], buf = '';
+  var toks = String(text).split(/(\s+)/);
+  for(var i=0;i<toks.length;i++){
+    buf += toks[i];
+    if(/[\.\!\?؟](\s|$)/.test(toks[i]) || /[\.\!\?؟]$/.test(toks[i])){ var s=buf.trim(); if(s) out.push(s); buf=''; }
+  }
+  var tail = buf.trim(); if(tail) out.push(tail);
+  /* ادمج أيّ جملةٍ قصيرةٍ جداً مع التالية لتفادي كثرة الفواصل */
+  var merged = [];
+  for(var j=0;j<out.length;j++){
+    if(merged.length && out[j].length < 24){ merged[merged.length-1] += ' ' + out[j]; }
+    else merged.push(out[j]);
+  }
+  return merged.length ? merged : [String(text)];
+}
 function _naSpeak(text, onend){
   if(!window.speechSynthesis || !text){ if(onend) onend(); return; }
   try{
-    var u = new SpeechSynthesisUtterance(text);
+    var parts = _naChunks(text);
     var lang = _naLang();
-    u.lang = lang==='ar' ? 'ar-SA' : 'en-GB';
-    var v = _naPickVoice(lang); if(v) u.voice = v;
-    u.rate = 0.95; u.pitch = 1.0;
-    var done = function(){ if(_naPump){ clearInterval(_naPump); _naPump=null; } if(onend) onend(); };
-    u.onend = done; u.onerror = done;
-    speechSynthesis.speak(u);
-    /* مضخّة استئنافٍ لتفادي قطع كروم للنطق الطويل */
-    if(_naPump) clearInterval(_naPump);
-    _naPump = setInterval(function(){ try{ if(speechSynthesis.speaking){ speechSynthesis.pause(); speechSynthesis.resume(); } }catch(e){} }, 9000);
+    var voice = _naPickVoice(lang);
+    var last = parts.length - 1;
+    parts.forEach(function(p, i){
+      var u = new SpeechSynthesisUtterance(p);
+      u.lang = lang==='ar' ? 'ar-SA' : 'en-GB';
+      if(voice) u.voice = voice;
+      u.rate = 0.95; u.pitch = 1.0;
+      if(i === last){ var done = function(){ if(onend) onend(); }; u.onend = done; u.onerror = done; }
+      speechSynthesis.speak(u); /* يُصَفُّ تباعاً فيُنطَق بسلاسةٍ دون صمت */
+    });
   }catch(e){ if(onend) onend(); }
 }
 function _naTextFor(key, i){
