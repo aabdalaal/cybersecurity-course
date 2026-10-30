@@ -510,7 +510,12 @@ body{background:var(--bg);font-family:var(--font);color:var(--text);margin:0}
 .sim-done-banner{background:linear-gradient(135deg,var(--secondary-l),#ecfdf5);border:1.5px solid var(--secondary);border-radius:var(--radius-xs);padding:12px 14px;margin-top:10px;white-space:normal}
 .sim-done-banner .t{font-weight:800;color:var(--secondary-d);font-size:13px;margin-bottom:4px;font-family:var(--font)}
 .sim-done-banner .f{font-family:var(--mono);font-size:12px;color:var(--green-d);direction:ltr;unicode-bidi:isolate;text-align:left}
-
+/* ===== بطاقة النسخة والتحديث في «حسابي» ===== */
+.ver-card{margin-top:18px;padding:14px;border-top:1px solid var(--border);text-align:center}
+.ver-line{font-size:12.5px;color:var(--text2);font-family:var(--mono);direction:ltr;unicode-bidi:isolate}
+.ver-update{font-size:12.5px;margin-top:2px;line-height:1.6}
+.ver-check-btn{font-size:12px;padding:6px 12px;margin-top:10px;color:var(--text2)}
+.ver-force-btn{margin-top:10px}
 </style>
 </head>
 <body>
@@ -574,6 +579,12 @@ body{background:var(--bg);font-family:var(--font);color:var(--text);margin:0}
       <button class="btn btn-secondary" data-i18n="export" onclick="exportProgress()">⬇️ تصدير التقدّم</button>
       <label class="btn btn-secondary" style="cursor:pointer"><span data-i18n="import">⬆️ استيراد التقدّم</span><input type="file" accept="application/json" style="display:none" onchange="importProgress(this)"></label>
       <button class="btn btn-ghost" data-i18n="reset" onclick="resetAll()" style="color:var(--danger)">🗑️ إعادة التعيين</button>
+    </div>
+    <div class="ver-card">
+      <div class="ver-line" id="ver-line"></div>
+      <div class="ver-update" id="ver-update"></div>
+      <button class="btn btn-ghost ver-check-btn" id="ver-check-btn" onclick="checkForUpdate(true)"></button>
+      <button class="btn btn-secondary ver-force-btn" id="ver-force-btn" onclick="forceUpdate()"></button>
     </div>
   </div>
 
@@ -667,8 +678,11 @@ body{background:var(--bg);font-family:var(--font);color:var(--text);margin:0}
   <button class="nav-tab" id="nav-profile" onclick="navigate('profile')"><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="nav-label" data-i18n="nav_profile">حسابي</span></button>
 </nav>
 <div id="toast"></div>
-
 <script>
+/* ===== معلومات النسخة — build.py يحقن تاريخ البناء مكان 2026-10-30 ===== */
+/* لتغيير رقم النسخة: عدّل ver فقط. */
+var APP_VERSION = { ver: '1.0.0', built: '2026-10-30', repo: 'aabdalaal/cybersecurity-course', branch: 'main' };
+
 /* ===== المحرّك (مُعاد حرفياً من النموذج المتحقَّق) ===== */
 /* ================= host stubs (what the real app provides) ================= */
 var lessonState = { moduleId: 0, labCompleted: false };
@@ -1205,7 +1219,7 @@ function applyI18n(){
 }
 
 /* ===== التحفيز والحالة ===== */
-var state = { language:'ar', xp:0, done:{}, labOut:{}, name:'متعلّم', streakDay:null, streak:0 };
+var state = { language:'ar', xp:0, done:{}, labOut:{}, name:'', streakDay:null, streak:0 };
 var LEVELS = [0,50,120,220,350,500];
 function levelOf(xp){ var L=1; for(var i=0;i<LEVELS.length;i++) if(xp>=LEVELS[i]) L=i+1; return L; }
 function awardXP(n){ state.xp+=n; saveState(); refreshChrome(); }
@@ -1297,8 +1311,9 @@ function renderProfile(){
     '<div class="stat"><div class="n">'+doneCount()+'/11</div><div class="l">'+T('p_units')+'</div></div>'
     +'<div class="stat"><div class="n">'+Object.keys(state.labOut).length+'</div><div class="l">'+T('p_labs')+'</div></div>'
     +'<div class="stat"><div class="n">'+state.streak+'</div><div class="l">'+T('p_streak')+'</div></div>';
+  if(typeof renderVersionInfo==='function') renderVersionInfo();
 }
-function editName(){ var n=prompt(T('namePrompt'), state.name||''); if(n!=null){ state.name=n.trim()||T('learner'); saveState(); renderProfile(); } }
+function editName(){ var n=prompt(T('namePrompt'), state.name||''); if(n!=null){ state.name=n.trim(); saveState(); renderProfile(); } }
 function resetAll(){ if(confirm(T('resetConfirm'))){ state={language:state.language,xp:0,done:{},labOut:{},name:state.name,streakDay:state.streakDay,streak:state.streak}; saveState(); navigate('home'); } }
 
 /* ===== عرض الوحدة ===== */
@@ -3113,8 +3128,81 @@ function _simComplete(){
   completeLabStage();
 }
 
+/* ===== واجهة النسخة والتحديث في صفحة «حسابي» ===== */
+Object.assign(I18N.ar, {
+  ver_label:'الإصدار', ver_built:'بُني', ver_check:'🔄 التحقّق من التحديثات',
+  ver_checking:'…جارٍ التحقّق', ver_latest:'✓ أنت على أحدث نسخة',
+  ver_update:'🔄 يتوفّر تحديث — اضغط للتحديث', ver_offline:'تعذّر التحقّق (غير متّصل)',
+  ver_ghupdate:'آخر تحديث على GitHub',
+  ver_force:'⬇️ سحب آخر نسخة من GitHub',
+  ver_force_confirm:'سيُعاد تحميل التطبيق لجلب آخر نسخة من GitHub (مع تجاوز الذاكرة المؤقّتة). تقدّمك محفوظٌ ولن يُفقَد. متابعة؟'
+});
+Object.assign(I18N.en, {
+  ver_label:'Version', ver_built:'Built', ver_check:'🔄 Check for updates',
+  ver_checking:'…checking', ver_latest:'✓ You are on the latest version',
+  ver_update:'🔄 Update available — click to update', ver_offline:'Check failed (offline)',
+  ver_ghupdate:'Latest update on GitHub',
+  ver_force:'⬇️ Pull latest from GitHub',
+  ver_force_confirm:'The app will reload to fetch the latest version from GitHub (bypassing the cache). Your progress is saved and will not be lost. Continue?'
+});
+
+function _verSiteURL(){ var p=(APP_VERSION.repo||'/').split('/'); return 'https://'+p[0]+'.github.io/'+p[1]+'/'; }
+
+function renderVersionInfo(){
+  var vl=document.getElementById('ver-line'); if(!vl) return;
+  vl.textContent = T('ver_label')+' '+APP_VERSION.ver+' · '+T('ver_built')+' '+APP_VERSION.built;
+  var btn=document.getElementById('ver-check-btn'); if(btn) btn.textContent=T('ver_check');
+  var fbtn=document.getElementById('ver-force-btn'); if(fbtn) fbtn.textContent=T('ver_force');
+  var up=document.getElementById('ver-update'); if(up) up.innerHTML='';
+  checkForUpdate(false); /* يستعمل المخزَّن إن كان حديثاً، وإلا يطلب مرّةً */
+}
+
+/* يُجبر جلب أحدث نسخة مع تجاوز الذاكرة المؤقّتة — غير متلِفٍ للتقدّم */
+function forceUpdate(){
+  if(!confirm(T('ver_force_confirm'))) return;
+  try{ localStorage.removeItem('csc_update_v1'); }catch(e){}
+  var bust='v='+Date.now();
+  if(location.protocol==='file:'){ window.location.href=_verSiteURL()+'?'+bust; return; } /* نسخةٌ منزَّلة → افتح الموقع الحيّ */
+  var base=location.href.split('#')[0].split('?')[0];
+  window.location.href=base+'?'+bust; /* أعِد تحميل الصفحة الحالية بمعامِلٍ يكسر الذاكرة المؤقّتة */
+}
+
+function checkForUpdate(force){
+  var up=document.getElementById('ver-update'); if(!up) return;
+  var KEY='csc_update_v1', TTL=6*3600*1000, now=Date.now();
+  if(!force){
+    try{ var c=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(c && (now-c.t)<TTL){ _renderUpd(c.date,c.msg,c.sha); return; }
+    }catch(e){}
+  }
+  up.innerHTML='<span class="note">'+T('ver_checking')+'</span>';
+  var url='https://api.github.com/repos/'+APP_VERSION.repo+'/commits?per_page=1&sha='+(APP_VERSION.branch||'main');
+  fetch(url,{headers:{'Accept':'application/vnd.github+json'}})
+    .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+    .then(function(a){
+      if(!a || !a.length) throw new Error('empty');
+      var c=a[0], date=((c.commit&&c.commit.committer&&c.commit.committer.date)||'').slice(0,10);
+      var msg=((c.commit&&c.commit.message)||'').split('\n')[0].slice(0,80), sha=(c.sha||'').slice(0,7);
+      try{ localStorage.setItem(KEY, JSON.stringify({t:now,date:date,msg:msg,sha:sha})); }catch(e){}
+      _renderUpd(date,msg,sha);
+    })
+    .catch(function(){ up.innerHTML='<span class="note" style="color:var(--text2)">'+T('ver_offline')+'</span>'; });
+}
+
+function _renderUpd(date,msg,sha){
+  var up=document.getElementById('ver-update'); if(!up) return;
+  var newer = (date||'') > (APP_VERSION.built||''); /* مقارنة ISO = مقارنة زمنية */
+  var meta = T('ver_ghupdate')+': '+date+(msg?(' — '+msg):'')+(sha?(' ('+sha+')'):'');
+  var status = newer
+    ? '<span onclick="forceUpdate()" role="button" tabindex="0" style="color:var(--accent-d);font-weight:700;cursor:pointer">'+T('ver_update')+'</span>'
+    : '<span style="color:var(--secondary-d);font-weight:600">'+T('ver_latest')+'</span>';
+  up.innerHTML='<div class="note" dir="auto" style="margin-top:6px;color:var(--text2)">'+meta+'</div>'
+             + '<div style="margin-top:4px">'+status+'</div>';
+}
+
 /* الإقلاع */
 try{ var sv=JSON.parse(localStorage.getItem('csc_state')||'null'); if(sv) state=Object.assign(state,sv); }catch(e){}
+if(state.name==='متعلّم'||state.name==='Learner') state.name=''; /* ترحيل الاسم الافتراضيّ القديم ليصير مترجَماً ديناميكياً */
 document.documentElement.dir = state.language==='ar'?'rtl':'ltr'; document.documentElement.lang=state.language;
 applyI18n(); navigate('home');
 </script>
