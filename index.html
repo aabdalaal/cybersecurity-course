@@ -3795,7 +3795,27 @@ function _renderUpd(date,msg,sha){
 try{ var sv=JSON.parse(localStorage.getItem('csc_state')||'null'); if(sv) state=Object.assign(state,sv); }catch(e){}
 if(state.name==='متعلّم'||state.name==='Learner') state.name=''; /* ترحيل الاسم الافتراضيّ القديم ليصير مترجَماً ديناميكياً */
 document.documentElement.dir = state.language==='ar'?'rtl':'ltr'; document.documentElement.lang=state.language;
-applyI18n(); navigate('home');
+applyI18n();
+
+/* ===== الروابط العميقة لرموز QR في الكتاب: #u=<1..11>&tab=concept|lab|quiz =====
+   الترقيم 1–11 كما يراه الطالب والكتاب؛ يُحوَّل داخلياً إلى معرّف المصفوفة (u-1). */
+function _applyDeepLink(){
+  try{
+    var h = (location.hash||'').replace(/^#/,''); if(!h) return false;
+    var pr = {}; h.split('&').forEach(function(kv){ var p=kv.split('='); pr[decodeURIComponent(p[0]||'').toLowerCase()] = decodeURIComponent(p[1]||'').toLowerCase(); });
+    var u = parseInt(pr.u, 10);
+    if(!(u>=1 && u<=11) || !MODULES[u-1]) return false;
+    openModule(u-1);
+    var tab = pr.tab || 'concept';
+    if(['concept','lab','quiz'].indexOf(tab) < 0) tab = 'concept';
+    if(tab==='quiz'){ var q=document.getElementById('tab-quiz'); if(q && q.disabled) tab = 'concept'; } /* الاختبار مقفل → الشرح */
+    showStage(tab);
+    window.scrollTo(0,0);
+    return true;
+  }catch(e){ return false; }
+}
+window.addEventListener('hashchange', function(){ _applyDeepLink(); });
+if(!_applyDeepLink()) navigate('home');
 </script>
 </body>
 </html>
