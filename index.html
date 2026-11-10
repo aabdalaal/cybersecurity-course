@@ -34534,6 +34534,7 @@ const i18n = {
     asm_t_match: 'Every claimed check is confirmed.',
     asm_t_mismatch: 'Claimed checks that could not be confirmed: {n}.',
     asm_t_who: '{name} · code {code} · {a} · exported {date}',
+    sync_local_only: 'Local only — progress stays on this device',
     asm_badge_a1_name: 'Portfolio Verified',
     asm_badge_a1_desc: 'Verify every practical check in the Cryptography Skills Portfolio',
     asm_badge_a2_name: 'PQC Consultant',
@@ -35464,6 +35465,7 @@ const i18n = {
     asm_t_match: 'كلّ تحقّقٍ مُدّعى مؤكَّد.',
     asm_t_mismatch: 'التحقّقات المُدّعاة التي تعذّر تأكيدها: {n}.',
     asm_t_who: '{name} · الرمز {code} · {a} · صُدِّر في {date}',
+    sync_local_only: 'محلّي فقط: يبقى تقدّمك على هذا الجهاز',
     asm_badge_a1_name: 'ملفّ مُتحقَّق',
     asm_badge_a1_desc: 'إنجاز جميع التحقّقات العملية في ملفّ المهارات التشفيرية',
     asm_badge_a2_name: 'مستشار ما بعد الكمّ',
@@ -35685,12 +35687,20 @@ function fetchWithTimeout(url, opts, ms) {
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(tid));
 }
 
+// v1.6.0: cloud sync needs a write token, and guest sessions stay local by design
+// (random per-session id, no privacy notice) — no request leaves the device otherwise.
+function cloudSyncAllowed() {
+  if (!currentUser || !currentUser.sub || String(currentUser.sub).indexOf('guest-') === 0) return false;
+  return !!localStorage.getItem('crypto_course_write_token');
+}
+
 async function pullSync() {
   const userId = currentUser?.sub;
   if (!userId) return;
   if (state.syncOptOut) return; // UK-GDPR: opted out — no identifier transmitted
   const base = getSyncEndpoint();
   if (!base) return;
+  if (!cloudSyncAllowed()) return; // guest or no write token — local only (v1.6.0)
   try {
     const resp = await fetchWithTimeout(`${base}/${encodeURIComponent(userId)}`, {
       headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('crypto_course_write_token') || '') },
@@ -35901,6 +35911,14 @@ async function triggerSync() {
     return;
   }
 
+  // v1.6.0: guests and sessions without a write token stay local — no request is sent
+  if (!cloudSyncAllowed()) {
+    if (syncEl) syncEl.textContent = t('sync_local_only');
+    const stuLocal = document.getElementById('sync-time-student');
+    if (stuLocal) stuLocal.textContent = t('sync_local_only');
+    return;
+  }
+
   if (syncEl) syncEl.textContent = t('syncing');
 
   // PR13 payload: exactly 6 field categories — no free-text, device ID, geolocation, or behavioural sequences
@@ -35958,7 +35976,7 @@ function pushRegistration() {
   const userId = currentUser?.sub;
   const base = getSyncEndpoint();
   const wt = localStorage.getItem('crypto_course_write_token');
-  if (!userId || !base || !wt) return;
+  if (!userId || !base || !wt || !cloudSyncAllowed()) return; // v1.6.0: never register guest ids
   const me = loadUsers().find(u => u.id === userId);
   fetchWithTimeout(`${base}/register/${encodeURIComponent(userId)}`, {
     method: 'PUT',
